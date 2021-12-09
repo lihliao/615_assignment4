@@ -1,0 +1,113 @@
+---
+title: "Task Three"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+##---load packages
+options(scipen = 6, digits = 4)
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("gutenbergr", "tidyverse", "stringr", "tidyr", "tidytext", "magrittr", "ggplot2", "textdata", "tnum", "kableExtra",
+               "sentimentr","knitr","tnum")
+
+
+```
+
+
+## Ingest book to tnum test2 space 
+
+```{r echo=TRUE}
+
+tnum.authorize("mssp1.bu.edu")
+tnum.setSpace("test2")
+
+uncletomref <- gutenberg_works(title == "Uncle Tom's Cabin")
+
+### download the text 
+uncletom <- gutenberg_download(gutenberg_id = 203) ## download uncle tom's cabin 
+
+
+```
+
+
+```{r}
+#uncletomtxt <- readLines("pg203.txt")
+source("Book2TN-v6A-1.R")
+tnBooksFromLines(uncletom$text, "stowe/uncletom") 
+```
+
+Now, verify the book has been ingested properly 
+```{r, eval=FALSE}
+tnum.getDBPathList(taxonomy="subject", levels=2)
+
+```
+
+## Sentimentr
+
+With sentimentr, we produced a histogram to demonstrate the sentiment of the text. According to the histogram, most of the sentiment is positive. 
+
+From the sentiment histogram below, we can see that at sentence level, the sentiment is majorly neutral, and more skewed to positive sentiment. 
+
+```{r }
+uncle_sen<-sentiment(uncletom$text)
+summary(uncle_sen$ave_sentiment)
+qplot(uncle_sen$sentiment,
+      geom = "histogram", binwidth = 0.1, 
+      main = "Sentiment Histogram")
+```
+
+## Bag of words comaprsion 
+
+In the task two, the analysis was conducted on a word basis, to compare the bag of words analysis and sentimentr, the bag of words need to adjusted to sentence level. Therefore, following we will conduct a sentence level analysis. 
+
+We used the sentence level analysis to produce over the sentence along with the plotline, what is the sentiment. We also plot the histogram based on sentiment. According to the histogram, the sentiment of sentences is almost symetric on both side of absolute neutral (0). With slightly skewed to the right, representing the positive sentiment. 
+```{r sentence, echo=F, message=F, warning=F}
+sentence_uncle = uncletom %>% 
+  mutate(
+    text = 
+      sapply(
+        text, 
+        stringi::stri_enc_toutf8, 
+        is_unknown_8bit = TRUE,
+        validate = TRUE
+        )
+  ) %>%
+  unnest_tokens(
+    output = sentence,
+    input = text,
+    token = 'sentences'
+  )
+
+
+# get baby doc, convert to words
+sentence_uncle <- sentence_uncle %>% 
+  mutate(sentence_id = 1:n()) %>%
+  unnest_tokens(
+    output = word,
+    input = sentence,
+    token = 'words',
+    drop = FALSE
+  ) %>%
+  ungroup()
+
+sentence_uncle_sentiment = sentence_uncle %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(sentence_id, sentence) %>% 
+  summarise(sentiment = sum(value)) %>%
+  ungroup()
+
+ggplot(data = sentence_uncle_sentiment, aes(sentence_id, sentiment)) +
+  geom_col(show.legend = FALSE) +
+  ggtitle("Sentiment values of Uncle Tom's Cabin on AFINN at sentence level ")
+
+qplot(sentence_uncle_sentiment$sentiment,
+      geom = "histogram", binwidth = 0.1, 
+      main = "Sentiment Histogram at sentence level")
+
+```
+
+
+
